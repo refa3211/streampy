@@ -4,6 +4,16 @@ import sys
 import vlc
 import tempfile
 import os
+import threading
+
+def download_thread(handle, ses):
+    while handle.status().state != lt.torrent_status.seeding:
+        s = handle.status()
+        state_str = ['queued', 'checking', 'downloading metadata', 
+                     'downloading', 'finished', 'seeding', 'allocating']
+        print(f'\r{state_str[s.state]} {s.progress:.2%} complete (down: {s.download_rate / 1000:.1f} kB/s up: {s.upload_rate / 1000:.1f} kB/s peers: {s.num_peers})', end=' ')
+        time.sleep(1)
+    print("\nDownload completed!")
 
 def stream_magnet(magnet_link):
     # Create a libtorrent session
@@ -32,12 +42,12 @@ def stream_magnet(magnet_link):
         largest_file_index = largest_file[0]
         handle.file_priority(largest_file_index, 7)
 
-        # Wait for the file to start downloading
-        while handle.status().state != lt.torrent_status.seeding:
-            s = handle.status()
-            state_str = ['queued', 'checking', 'downloading metadata', 
-                         'downloading', 'finished', 'seeding', 'allocating']
-            print(f'\r{state_str[s.state]} {s.progress:.2%} complete (down: {s.download_rate / 1000:.1f} kB/s up: {s.upload_rate / 1000:.1f} kB/s peers: {s.num_peers})', end=' ')
+        # Start the download thread
+        download_thread = threading.Thread(target=download_thread, args=(handle, ses))
+        download_thread.start()
+
+        # Wait for some initial data to be downloaded (e.g., 5%)
+        while handle.status().progress < 0.05:
             time.sleep(1)
 
         print("\nStarting playback...")
@@ -56,13 +66,17 @@ def stream_magnet(magnet_link):
         # Play the media
         player.play()
 
-        print("Press Ctrl+C to stop playback and exit.")
+        print("Playback started. Press Ctrl+C to stop playback and exit.")
         try:
             while True:
                 time.sleep(1)
+                # You might want to add some checks here, e.g., to see if playback has ended
         except KeyboardInterrupt:
             print("\nStopping playback and cleaning up...")
             player.stop()
+
+        # Wait for the download thread to finish
+        download_thread.join()
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
