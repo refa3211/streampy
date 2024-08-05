@@ -6,7 +6,7 @@ import tempfile
 import os
 import threading
 
-def download_thread(handle, ses):
+def download_progress(handle, ses):
     while handle.status().state != lt.torrent_status.seeding:
         s = handle.status()
         state_str = ['queued', 'checking', 'downloading metadata', 
@@ -26,24 +26,23 @@ def stream_magnet(magnet_link):
         # Add magnet link
         params = {
             'save_path': tmpdirname,
-            'storage_mode': lt.storage_mode_t(2),
+            'storage_mode': lt.storage_mode_t.storage_mode_sparse,
         }
-        handle = lt.add_magnet_uri(ses, magnet_link, params)
+        handle = ses.add_magnet_uri(magnet_link, params)
 
         print("Downloading metadata...")
-        while not handle.has_metadata():
+        while not handle.status().has_metadata:
             time.sleep(1)
         print("Got metadata, starting torrent download...")
 
         # Prioritize first file
-        torrent_info = handle.get_torrent_info()
+        torrent_info = handle.status().handle.torrent_file()
         files = torrent_info.files()
-        largest_file = max(enumerate(files), key=lambda x: x[1].size)
-        largest_file_index = largest_file[0]
-        handle.file_priority(largest_file_index, 7)
+        largest_file = max(range(files.num_files()), key=lambda i: files.file_size(i))
+        handle.file_priority(largest_file, 7)
 
         # Start the download thread
-        download_thread = threading.Thread(target=download_thread, args=(handle, ses))
+        download_thread = threading.Thread(target=download_progress, args=(handle, ses))
         download_thread.start()
 
         # Wait for some initial data to be downloaded (e.g., 5%)
@@ -53,7 +52,7 @@ def stream_magnet(magnet_link):
         print("\nStarting playback...")
         
         # Get the file path
-        file_path = os.path.join(tmpdirname, files.file_path(largest_file_index))
+        file_path = os.path.join(tmpdirname, files.file_path(largest_file))
 
         # Create a VLC instance
         instance = vlc.Instance()
