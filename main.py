@@ -43,8 +43,8 @@ def stream_magnet(magnet_link):
         download_thread = threading.Thread(target=download_progress, args=(handle,))
         download_thread.start()
 
-        # Wait for some initial data to be downloaded (e.g., 5%)
-        while handle.status().progress < 0.05:
+        # Wait for more data to be downloaded (e.g., 20%)
+        while handle.status().progress < 0.20:
             time.sleep(1)
 
         print("\nStarting playback...")
@@ -53,11 +53,13 @@ def stream_magnet(magnet_link):
         file_path = os.path.join(tmpdirname, files.file_path(largest_file))
 
         # Create a VLC instance
-        instance = vlc.Instance()
+        instance = vlc.Instance('--no-video-title-show')
 
         # Create a MediaPlayer with the file
         player = instance.media_player_new()
         media = instance.media_new(file_path)
+        media.add_option('--sout=#file{dst=test.mp4}')
+        media.add_option('--sout-keep')
         player.set_media(media)
 
         # Play the media
@@ -67,9 +69,13 @@ def stream_magnet(magnet_link):
         try:
             while True:
                 time.sleep(1)
-                # You might want to add some checks here, e.g., to see if playback has ended
+                state = player.get_state()
+                if state == vlc.State.Ended:
+                    print("\nPlayback ended.")
+                    break
         except KeyboardInterrupt:
             print("\nStopping playback and cleaning up...")
+        finally:
             player.stop()
 
         # Wait for the download thread to finish
