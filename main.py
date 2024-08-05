@@ -6,8 +6,8 @@ import tempfile
 import os
 import threading
 
-def download_progress(handle, ses):
-    while handle.status().state != lt.torrent_status.seeding:
+def download_progress(handle):
+    while (handle.status().state != lt.torrent_status.seeding):
         s = handle.status()
         state_str = ['queued', 'checking', 'downloading metadata', 
                      'downloading', 'finished', 'seeding', 'allocating']
@@ -24,25 +24,23 @@ def stream_magnet(magnet_link):
         print(f"Created temporary directory: {tmpdirname}")
         
         # Add magnet link
-        params = {
-            'save_path': tmpdirname,
-            'storage_mode': lt.storage_mode_t.storage_mode_sparse,
-        }
-        handle = ses.add_magnet_uri(magnet_link, params)
+        params = lt.parse_magnet_uri(magnet_link)
+        params.save_path = tmpdirname
+        handle = ses.add_torrent(params)
 
         print("Downloading metadata...")
-        while not handle.status().has_metadata:
+        while not handle.has_metadata():
             time.sleep(1)
         print("Got metadata, starting torrent download...")
 
         # Prioritize first file
-        torrent_info = handle.status().handle.torrent_file()
+        torrent_info = handle.get_torrent_info()
         files = torrent_info.files()
         largest_file = max(range(files.num_files()), key=lambda i: files.file_size(i))
         handle.file_priority(largest_file, 7)
 
         # Start the download thread
-        download_thread = threading.Thread(target=download_progress, args=(handle, ses))
+        download_thread = threading.Thread(target=download_progress, args=(handle,))
         download_thread.start()
 
         # Wait for some initial data to be downloaded (e.g., 5%)
