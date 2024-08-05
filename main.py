@@ -44,6 +44,7 @@ def stream_magnet(magnet_link):
         
         # Get the file path
         file_path = os.path.join(tmpdirname, files.file_path(largest_file_index))
+        print(file_path)
 
         # Create a VLC instance
         instance = vlc.Instance()
